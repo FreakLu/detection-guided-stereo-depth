@@ -333,9 +333,9 @@ def sgm_disparity_8dir_numba(cost_vol, P1=8, P2=32):
 def census_transform(img: np.ndarray,window_size: int = 2) ->np.ndarry:
     assert img.ndim ==2, "grayscale only"
     H,W = img.shape
-    code = np.zeros((H,W),dtype = np.uint32)
+    code = np.zeros((H,W),dtype = np.uint64)
 
-    center = img.astype(np.uint32)
+    center = img.astype(np.uint64)
 
     bit = 0
     for dy in range(-window_size,window_size+1):
@@ -343,7 +343,7 @@ def census_transform(img: np.ndarray,window_size: int = 2) ->np.ndarry:
             if dy == 0 and dx == 0:
                 continue
 
-            shifted = np.zeros((H,W),dtype = np.uint32)
+            shifted = np.zeros((H,W),dtype = np.uint64)
 
             y0 = max(0,dy)
             y1 = min(H,H+dy)
@@ -352,7 +352,7 @@ def census_transform(img: np.ndarray,window_size: int = 2) ->np.ndarry:
 
             shifted[y0:y1,x0:x1] = center[y0-dy:y1-dy,x0-dx:x1-dx]
 
-            b = (shifted < center).astype(np.uint32)
+            b = (shifted < center).astype(np.uint64)
 
             code |= (b<<bit)
 
@@ -367,7 +367,7 @@ def census_transform(img: np.ndarray,window_size: int = 2) ->np.ndarry:
 
 def popcount_uint32(x:np.ndarray) -> np.ndarray:
     count = np.zeros_like(x, dtype = np.uint8)
-    for i in range(32):
+    for i in range(64):
         count += (x>>i)&1
     return count
 
@@ -595,10 +595,10 @@ right_bgr = frame[:, mid:]
 K1, D1, K2, D2, R, T, size = load_stereo_json(json_path)
 maps = build_rectify_maps(K1, D1, K2, D2, R, T, size, alpha=0)
 
-Lr, Rr = rectify_pair(left_bgr, right_bgr, maps)
-
 left = cv2.imread("selected/1.png", 0)
 right = cv2.imread("selected/0.png", 0)
+
+Lr, Rr = rectify_pair(left_bgr, right_bgr, maps)
 
 Lr_gray = cv2.cvtColor(Lr, cv2.COLOR_BGR2GRAY)
 Rr_gray = cv2.cvtColor(Rr, cv2.COLOR_BGR2GRAY)
@@ -606,8 +606,8 @@ Rr_gray = cv2.cvtColor(Rr, cv2.COLOR_BGR2GRAY)
 Census_L = census_transform(Lr_gray,2)
 Census_R = census_transform(Rr_gray,2)
 
-min_disp = 190
-num_disp = 80
+min_disp = 160
+num_disp = 120
 
 volume = build_cost_volume_census_range(Census_L,Census_R,min_disp, num_disp)
 
@@ -616,7 +616,7 @@ print(volume[200,300,:])
 t0 = time.time()
 
 disp_wta = np.argmin(volume,axis=2)
-disp_sgm = sgm_disparity_8dir_numba(volume,P1=4, P2=36)
+disp_sgm = sgm_disparity_8dir_numba(volume,P1=8, P2=40)
 disp_sgm = disp_sgm + min_disp
 print("SGM time:", time.time() - t0)
 
