@@ -1,7 +1,7 @@
 from pathlib import Path
 import cv2
 
-in_dir = Path("data/input")
+in_dir = Path("data/images")
 
 for p in in_dir.iterdir():
     if p.is_file() and p.suffix.lower() == ".png":
