@@ -76,6 +76,14 @@ def split_yolo_points(
             )
     return left_pts, right_pts
 
+def filter_points_by_name(
+    pts: List[AnnPoint],
+    keep_names: List[str]
+) -> List[AnnPoint]:
+    """
+    只保留 label 在 keep_names 里的点
+    """
+    return [p for p in pts if p.label in keep_names]
 
 def split_stereo_image(img: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -433,6 +441,7 @@ def main():
 
     # ================= 读点 =================
     points = load_points_from_yolo(yolo_output_json_path)
+    points = filter_points_by_name(points, ["broadleaf_weed", "grass_weed"])
     print(points)
     left_pts , right_pts = split_yolo_points(points,img_width/2)
 
