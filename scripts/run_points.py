@@ -14,49 +14,79 @@ class AnnPoint:
     label: str = ""
 
 
-# -----------------------------
-# 1) 读 x-anylabeling 的 JSON 点
-# -----------------------------
-def load_points_from_xanylabeling(json_path: str) -> List[AnnPoint]:
+def load_points_from_yolo(json_path: str) -> List[AnnPoint]:
     """
-    尽量兼容常见导出格式：
-    - LabelMe 风格：data["shapes"]，shape["shape_type"] == "point"
-      points: [[x, y]] 或 [[x1,y1],[x2,y2]](我们取第一个)
-    - 有些导出：data["points"] 或 data["annotations"] 之类
+    只读取 YOLO 输出格式：
+    {
+      "frame": int,
+      "detections": [
+        {"x": float, "y": float, "name": str, ...}
+      ]
+    }
     """
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     pts: List[AnnPoint] = []
 
-    # Case A: labelme-like "shapes"
-    if isinstance(data, dict) and "shapes" in data and isinstance(data["shapes"], list):
-        for s in data["shapes"]:
-            if not isinstance(s, dict):
-                continue
-            st = s.get("shape_type", "")
-            if st != "point":
-                continue
-            label = str(s.get("label", ""))
-            p = s.get("points", None)
-            if not p:
-                continue
-            # points 可能是 [[x,y]] 或 [[x1,y1],[x2,y2]]；取第一个
-            x, y = p[0]
-            pts.append(AnnPoint(float(x), float(y), label))
+    if not isinstance(data, dict):
         return pts
 
-    # Case B: data["points"] = [{"x":..,"y":..,"label":..}, ...]
-    if isinstance(data, dict) and "points" in data and isinstance(data["points"], list):
-        for p in data["points"]:
-            if isinstance(p, dict) and "x" in p and "y" in p:
-                pts.append(AnnPoint(float(p["x"]), float(p["y"]), str(p.get("label", ""))))
-        if pts:
-            return pts
+    dets = data.get("detections", [])
+    if not isinstance(dets, list):
+        return pts
 
-    # Case C: 兜底：在全 dict 里找可能的点列表
-    # （如果你导出的格式不在上面两类，你把 JSON 里 “点”的那一段结构贴我，我再改）
-    raise ValueError(f"Unrecognized x-anylabeling json format: {json_path}")
+    for d in dets:
+        if not isinstance(d, dict):
+            continue
+        if "x" not in d or "y" not in d:
+            continue
+
+        pts.append(
+            AnnPoint(
+                x=float(d["x"]),
+                y=float(d["y"]),
+                label=str(d.get("name", ""))  # YOLO 的类别名
+            )
+        )
+
+    return pts
+
+def split_yolo_points(
+    pts: List[AnnPoint],
+    img_width: int
+) -> Tuple[List[AnnPoint], List[AnnPoint]]:
+    """
+    根据 x 坐标把 YOLO 点拆成 left_pts / right_pts
+    右图点的 x 会减去 img_width，变回右图坐标系
+    """
+    left_pts: List[AnnPoint] = []
+    right_pts: List[AnnPoint] = []
+
+    for p in pts:
+        if p.x < img_width:
+            left_pts.append(p)
+        else:
+            right_pts.append(
+                AnnPoint(
+                    x=p.x - img_width,
+                    y=p.y,
+                    label=p.label
+                )
+            )
+    return left_pts, right_pts
+
+
+def split_stereo_image(img: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    输入：左右合并图 (H, 2W, 3)
+    输出：imgL, imgR
+    """
+    H, W2 = img.shape[:2]
+    W = W2 // 2
+    imgL = img[:, :W].copy()
+    imgR = img[:, W:].copy()
+    return imgL, imgR
 
 
 # -----------------------------
@@ -384,6 +414,8 @@ def draw_step2_final_matches(
 # -----------------------------
 def main():
     # ================= 路径 =================
+    img_yolo_path   = "/tmp/latest_frame.png"
+    yolo_output_json_path = "/tmp/latest_yolo.json"
     left_img_path   = "data/images/stereo_02_L.png"
     right_img_path  = "data/images/stereo_02_R.png"
     left_json_path  = "data/json/stereo_02_L.json"
@@ -391,15 +423,18 @@ def main():
     calib_path      = "calibration.json"
 
     # ================= 读图 =================
-    imgL = cv2.imread(left_img_path, cv2.IMREAD_COLOR)
-    imgR = cv2.imread(right_img_path, cv2.IMREAD_COLOR)
+    img_yolo = cv2.imread(img_yolo_path,cv2.IMREAD_COLOR)
+    imgL,imgR = split_stereo_image(img_yolo)
+
+    _,img_width = img_yolo.shape[:2]
 
     if imgL is None or imgR is None:
         raise RuntimeError("Image load failed")
 
     # ================= 读点 =================
-    left_pts  = load_points_from_xanylabeling(left_json_path)
-    right_pts = load_points_from_xanylabeling(right_json_path)
+    points = load_points_from_yolo(yolo_output_json_path)
+    print(points)
+    left_pts , right_pts = split_yolo_points(points,img_width/2)
 
     print("Loaded points:", "L =", len(left_pts), "R =", len(right_pts))
 
@@ -441,17 +476,17 @@ def main():
     )
 
     # ================= 可视化 =================
-    vis = draw_step1_vis(
-        imgL, imgR,
-        left_pts, right_pts,
-        candidates,
-        scale=0.5,
-        max_lines_per_left=30,
-        show_index=True
-    )
+    # vis = draw_step1_vis(
+    #     imgL, imgR,
+    #     left_pts, right_pts,
+    #     candidates,
+    #     scale=0.5,
+    #     max_lines_per_left=30,
+    #     show_index=True
+    # )
 
-    cv2.imshow("step1_candidates", vis)
-    cv2.waitKey(0)
+    # cv2.imshow("step1_candidates", vis)
+    # cv2.waitKey(0)
 
     # ===== Step2: Census match + refine =====
     L_gray = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY)
