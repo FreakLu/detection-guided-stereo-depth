@@ -15,7 +15,8 @@ def estimate_depth_at_points(
     fx: float, baseline: float,
     filter_names: Optional[List[str]] = None,
     dy: float = 20, dmin: float = 0, dmax: float = 500,
-    return_vis: bool = False
+    return_vis: bool = False,
+    show_vis: bool = True
 ) -> Tuple[List[PointDepthResult], Optional[np.ndarray]]:
     t0 = time.perf_counter()
     img_yolo = cv2.imread(img_stereo_path,cv2.IMREAD_COLOR)
@@ -97,9 +98,9 @@ def estimate_depth_at_points(
     vis2 = draw_step2_final_matches(imgL, imgR, left_pts, right_pts, matches, scale=0.5, show_index=True)
     t1 = time.perf_counter()
     print(f"[estimate_depth_at_points] time = {(t1 - t0)*1000:.2f} ms")
-    if return_vis:
+    if show_vis:
         cv2.imshow("step2_final_matches", vis2)
-        cv2.waitKey(0)
+        cv2.waitKey(30)
     if return_vis:
         return results, vis2
     else:
