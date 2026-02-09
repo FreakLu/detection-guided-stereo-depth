@@ -3,7 +3,9 @@
 本算法适用于由检测模型（如YOLO v11）的输出作为先验条件的目标点深度检测
 同时也提供单帧图像全图稠密深度的接口
 
-## 环境安装
+典型运用为农业机器人场景下的杂草深度识别
+
+## 运行环境
 
 虚拟环境
 
@@ -67,3 +69,6 @@ def save_latest_yolo_json(line_obj):
 
 运行示例参见global_match_demo.py和points_match_demo.py
 
+## 运行效果示例
+
+![](/points_match.gif)

@@ -29,10 +29,6 @@ def build_candidates(
         cand.append(ci)
     return cand
 
-
-# -----------------------------
-# 3) 统计：看 gating 松紧是否合理
-# -----------------------------
 def print_candidate_stats(candidates: List[List[int]], name: str = "stats"):
     lens = np.array([len(c) for c in candidates], dtype=np.int32)
     if len(lens) == 0:
@@ -42,10 +38,6 @@ def print_candidate_stats(candidates: List[List[int]], name: str = "stats"):
     print(f"[{name}] cand_mean={float(lens.mean()):.3f}  cand_median={float(np.median(lens)):.3f}  cand_max={int(lens.max())}")
     print(f"[{name}] ratio_empty={float(np.mean(lens == 0)):.3f}  ratio_gt10={float(np.mean(lens > 10)):.3f}")
 
-
-# -----------------------------
-# 4) 可视化：拼接左右图 + 点 + 候选连线
-# -----------------------------
 def to_bgr(img: np.ndarray) -> np.ndarray:
     if img is None:
         raise ValueError("image is None (check path)")
@@ -69,21 +61,18 @@ def draw_step1_vis(
     H1, W1 = imgL.shape[:2]
     H2, W2 = imgR.shape[:2]
     if H1 != H2:
-        # 简单处理：把右图 resize 到同高（只为可视化，真实匹配建议用矫正后同尺寸）
         imgR = cv2.resize(imgR, (int(W2 * H1 / H2), H1), interpolation=cv2.INTER_AREA)
         H2, W2 = imgR.shape[:2]
 
     canvas = np.hstack([imgL, imgR])
     offset_x = W1
 
-    # 右点：绿圈
     for j, q in enumerate(right_pts):
         cv2.circle(canvas, (int(q.x + offset_x), int(q.y)), 5, (0, 255, 0), 2)
         if show_index:
             cv2.putText(canvas, f"R{j}", (int(q.x + offset_x) + 6, int(q.y) - 6),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
 
-    # 左点：红圈 + 候选线
     for i, p in enumerate(left_pts):
         xL, yL = int(p.x), int(p.y)
         cv2.circle(canvas, (xL, yL), 5, (0, 0, 255), 2)
@@ -98,18 +87,14 @@ def draw_step1_vis(
         for j in js:
             q = right_pts[j]
             xR, yR = int(q.x + offset_x), int(q.y)
-            # 候选线：浅黄蓝（看得清但不刺眼）
             cv2.line(canvas, (xL, yL), (xR, yR), (255, 200, 0), 1)
 
     if scale != 1.0:
         canvas = cv2.resize(canvas, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
     return canvas
 
-
-# ===== Step2: Census-based point matching (local refinement) =====
 from stereo.census import census_transform
 
-# 8-bit popcount lookup table (no .bit_count dependency)
 _POPCNT_LUT = np.array([bin(i).count("1") for i in range(256)], dtype=np.uint8)
 
 def _patch_bbox(x: int, y: int, r: int, W: int, H: int):
@@ -126,9 +111,8 @@ def _hamming_cost_patch_u32(patchL_u32: np.ndarray, patchR_u32: np.ndarray) -> i
     patchL_u32, patchR_u32: (h,w) uint32 census codes
     cost = sum popcount( patchL XOR patchR ) over all pixels in patch
     """
-    xor = np.bitwise_xor(patchL_u32, patchR_u32)  # uint32
-    # view as bytes and popcount with LUT
-    xb = xor.view(np.uint8)  # shape (h,w,4) on little-endian
+    xor = np.bitwise_xor(patchL_u32, patchR_u32)  
+    xb = xor.view(np.uint8) 
     return int(_POPCNT_LUT[xb].sum())
 
 def census_match_one_candidate(
@@ -148,7 +132,7 @@ def census_match_one_candidate(
     H, W = census_L.shape
     bbL = _patch_bbox(xL, yL, r, W, H)
     if bbL is None:
-        return None  # left patch out of bounds
+        return None  
 
     x0L, x1L, y0L, y1L = bbL
     patchL = census_L[y0L:y1L, x0L:x1L]  # (2r+1,2r+1)
@@ -158,7 +142,6 @@ def census_match_one_candidate(
     best_dx = 0
     best_dy = 0
 
-    # small local search
     for dy in range(-dy_max, dy_max + 1):
         yy = yR + dy
         for dx in range(-dx_max, dx_max + 1):
@@ -192,7 +175,6 @@ def step2_match_points_census(
     patch_r: int = 8,        # 17x17
     dx_max: int = 5,
     dy_max: int = 0,
-    # thresholds (you WILL tune these)
     max_best_cost: int = 999999999,
     min_gap: int = 0
 ):
@@ -202,7 +184,6 @@ def step2_match_points_census(
     dict fields:
       j, xR_ref, yR_ref, disp, best_cost, second_cost, gap, dx, dy
     """
-    # 1) census on full rectified images (reuse validated module)
     census_L = census_transform(imgL_gray, window_size=census_window_size)
     census_R = census_transform(imgR_gray, window_size=census_window_size)
 
@@ -215,9 +196,8 @@ def step2_match_points_census(
 
         xL, yL = int(round(p.x)), int(round(p.y))
 
-        best_overall = None  # (best_cost, j, best_dx, best_dy, second_cost)
+        best_overall = None 
 
-        # evaluate each candidate right point
         for j in js:
             q = right_pts[j]
             xR, yR = int(round(q.x)), int(round(q.y))
@@ -243,7 +223,6 @@ def step2_match_points_census(
         best_cost, j_star, dx_star, dy_star, second_cost = best_overall
         gap = int(second_cost - best_cost) if second_cost < (1 << 59) else 999999999
 
-        # reject rules (tune later)
         if best_cost > max_best_cost:
             continue
         if gap < min_gap:
@@ -283,7 +262,6 @@ def draw_step2_final_matches(
     canvas = np.hstack([imgL, imgR])
     off = W
 
-    # draw all points
     for i, p in enumerate(left_pts):
         cv2.circle(canvas, (int(p.x), int(p.y)), 6, (0, 0, 255), 2)
         if show_index:
@@ -296,7 +274,6 @@ def draw_step2_final_matches(
             cv2.putText(canvas, f"R{j}", (int(q.x + off) + 8, int(q.y) - 8),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
-    # draw final 1-to-1 matches only
     for i, m in enumerate(matches):
         if m is None:
             continue
@@ -305,15 +282,12 @@ def draw_step2_final_matches(
         xR_ref = int(m["xR_ref"])
         yR_ref = int(m["yR_ref"])
 
-        # thick cyan line for final match
         cv2.line(canvas, (xL, yL), (xR_ref + off, yR_ref), (255, 255, 0), 2)
 
-        # annotate disparity and cost
         txt = f"d={m['disp']} c={m['best_cost']} g={m['gap']}"
         cv2.putText(canvas, txt, (xL + 8, yL + 18),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 0), 1)
 
-        # mark refined right point center (small cross)
         cv2.drawMarker(canvas, (xR_ref + off, yR_ref), (255, 255, 0),
                        markerType=cv2.MARKER_TILTED_CROSS, markerSize=10, thickness=2)
 
