@@ -36,7 +36,6 @@ def sgm_aggregate_8dir(cost_vol: np.ndarray,
         m = np.minimum(t0, np.minimum(t1, np.minimum(t2, t3)))
         return c + m - min_prev
 
-    # -------- 1) left -> right (→) --------
     for y in range(H):
         L_prev = np.zeros(D, np.int32)
         for x in range(W):
@@ -44,7 +43,6 @@ def sgm_aggregate_8dir(cost_vol: np.ndarray,
             S[y, x] += L
             L_prev = L
 
-    # -------- 2) right -> left (←) --------
     for y in range(H):
         L_prev = np.zeros(D, np.int32)
         for x in range(W - 1, -1, -1):
@@ -52,7 +50,6 @@ def sgm_aggregate_8dir(cost_vol: np.ndarray,
             S[y, x] += L
             L_prev = L
 
-    # -------- 3) top -> bottom (↓) --------
     for x in range(W):
         L_prev = np.zeros(D, np.int32)
         for y in range(H):
@@ -60,7 +57,6 @@ def sgm_aggregate_8dir(cost_vol: np.ndarray,
             S[y, x] += L
             L_prev = L
 
-    # -------- 4) bottom -> top (↑) --------
     for x in range(W):
         L_prev = np.zeros(D, np.int32)
         for y in range(H - 1, -1, -1):
@@ -68,8 +64,6 @@ def sgm_aggregate_8dir(cost_vol: np.ndarray,
             S[y, x] += L
             L_prev = L
 
-    # -------- 5) top-left -> bottom-right (↘) --------
-    # scan order: y increasing, x increasing
     for y0 in range(H):
         y, x = y0, 0
         L_prev = np.zeros(D, np.int32)
@@ -91,8 +85,6 @@ def sgm_aggregate_8dir(cost_vol: np.ndarray,
             first = False
             y += 1; x += 1
 
-    # -------- 6) bottom-right -> top-left (↖) --------
-    # reverse of ↘ : y decreasing, x decreasing
     for y0 in range(H - 1, -1, -1):
         y, x = y0, W - 1
         L_prev = np.zeros(D, np.int32)
@@ -114,8 +106,6 @@ def sgm_aggregate_8dir(cost_vol: np.ndarray,
             first = False
             y -= 1; x -= 1
 
-    # -------- 7) bottom-left -> top-right (↗) --------
-    # scan order: y decreasing, x increasing
     for y0 in range(H - 1, -1, -1):
         y, x = y0, 0
         L_prev = np.zeros(D, np.int32)
@@ -137,8 +127,6 @@ def sgm_aggregate_8dir(cost_vol: np.ndarray,
             first = False
             y -= 1; x += 1
 
-    # -------- 8) top-right -> bottom-left (↙) --------
-    # reverse of ↗ : y increasing, x decreasing
     for y0 in range(H):
         y, x = y0, W - 1
         L_prev = np.zeros(D, np.int32)
@@ -166,7 +154,6 @@ def sgm_aggregate_8dir(cost_vol: np.ndarray,
 def dp_update_1d(prev_L, c, P1, P2, out_L):
     D = prev_L.shape[0]
 
-    # min_prev
     min_prev = prev_L[0]
     for d in range(1, D):
         v = prev_L[d]

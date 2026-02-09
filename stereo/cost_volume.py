@@ -23,7 +23,7 @@ def build_cost_volume_census(census_L,census_R,max_disp):
         xor = census_L ^ shifted_R
         cost = popcount_uint32(xor)
         if d > 0:
-            cost[:, :d] = 255   # 这 d 列是无效匹配，强制惩罚
+            cost[:, :d] = 255
         cost_volume[:,:,d] = cost
 
     return cost_volume
@@ -39,7 +39,6 @@ def build_cost_volume_census_range(census_L, census_R, min_disp, num_disp):
 
         shifted_R = np.zeros_like(census_R)
 
-        # 只考虑正视差（正常左图为参考）
         if d > 0:
             shifted_R[:, d:] = census_R[:, :-d]
         else:

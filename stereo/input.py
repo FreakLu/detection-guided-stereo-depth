@@ -22,7 +22,6 @@ def _batch_split_images():
 
 def load_points_from_yolo(json_path: str) -> List[AnnPoint]:
     """
-    只读取 YOLO 输出格式：
     {
       "frame": int,
       "detections": [
@@ -52,7 +51,7 @@ def load_points_from_yolo(json_path: str) -> List[AnnPoint]:
             AnnPoint(
                 x=float(d["x"]),
                 y=float(d["y"]),
-                label=str(d.get("name", ""))  # YOLO 的类别名
+                label=str(d.get("name", ""))
             )
         )
 
@@ -62,10 +61,7 @@ def split_yolo_points(
     pts: List[AnnPoint],
     img_width: int
 ) -> Tuple[List[AnnPoint], List[AnnPoint]]:
-    """
-    根据 x 坐标把 YOLO 点拆成 left_pts / right_pts
-    右图点的 x 会减去 img_width，变回右图坐标系
-    """
+ 
     left_pts: List[AnnPoint] = []
     right_pts: List[AnnPoint] = []
 
@@ -86,16 +82,11 @@ def filter_points_by_name(
     pts: List[AnnPoint],
     keep_names: List[str]
 ) -> List[AnnPoint]:
-    """
-    只保留 label 在 keep_names 里的点
-    """
+
     return [p for p in pts if p.label in keep_names]
 
 def split_stereo_image(img: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    输入：左右合并图 (H, 2W, 3)
-    输出：imgL, imgR
-    """
+
     H, W2 = img.shape[:2]
     W = W2 // 2
     imgL = img[:, :W].copy()
